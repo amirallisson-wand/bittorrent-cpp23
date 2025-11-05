@@ -1,6 +1,7 @@
 #include "bittorrent/bencode/parser.hpp"
 #include <cctype>
 #include <charconv>
+#include <iostream>
 
 namespace bittorrent::bencode {
 
@@ -16,7 +17,6 @@ std::expected<Value, ParseError> Parser::parse_value() {
 
     const char c = peek();
 
-    // Integer: i<number>e
     if (c == 'i') {
         auto result = parse_integer();
         if (!result) {
@@ -25,8 +25,7 @@ std::expected<Value, ParseError> Parser::parse_value() {
         return Value{*result};
     }
 
-    // String: <length>:<data>
-    if (std::isdigit(c)) {
+    if (std::isdigit(static_cast<unsigned char>(c))) {
         auto result = parse_string();
         if (!result) {
             return std::unexpected(result.error());
@@ -34,7 +33,6 @@ std::expected<Value, ParseError> Parser::parse_value() {
         return Value{*result};
     }
 
-    // List: l<items>e
     if (c == 'l') {
         auto result = parse_list();
         if (!result) {
@@ -43,7 +41,6 @@ std::expected<Value, ParseError> Parser::parse_value() {
         return Value{*result};
     }
 
-    // Dictionary: d<key><value>...e
     if (c == 'd') {
         auto result = parse_dictionary();
         if (!result) {
@@ -92,11 +89,12 @@ std::expected<Integer, ParseError> Parser::parse_integer() {
 
 std::expected<String, ParseError> Parser::parse_string() {
     size_t start = pos_;
-    while (has_more() && std::isdigit(peek())) {
+    while (has_more() && std::isdigit(static_cast<unsigned char>(peek()))) {
         consume();
     }
 
     if (!has_more() || peek() != ':') {
+        std::cerr << "Invalid string at pos " << pos_ << ": expected ':', got '" << peek() << "'\n";
         return std::unexpected(ParseError::InvalidString);
     }
 
@@ -105,12 +103,15 @@ std::expected<String, ParseError> Parser::parse_string() {
     auto [ptr, ec] = std::from_chars(length_str.data(), length_str.data() + length_str.size(), length);
 
     if (ec != std::errc{}) {
+        std::cerr << "Invalid string length at pos " << start << "\n";
         return std::unexpected(ParseError::InvalidLength);
     }
 
     consume();
 
     if (pos_ + length > data_.size()) {
+        std::cerr << "String too long: trying to read " << length << " bytes at pos " << pos_ 
+                  << " but only " << (data_.size() - pos_) << " bytes remaining\n";
         return std::unexpected(ParseError::UnexpectedEnd);
     }
 
@@ -122,6 +123,7 @@ std::expected<String, ParseError> Parser::parse_string() {
 
 std::expected<List, ParseError> Parser::parse_list() {
     if (consume() != 'l') {
+        std::cerr << "Invalid format in list: " << peek() << std::endl;
         return std::unexpected(ParseError::InvalidFormat);
     }
 
@@ -145,6 +147,7 @@ std::expected<List, ParseError> Parser::parse_list() {
 
 std::expected<Dictionary, ParseError> Parser::parse_dictionary() {
     if (consume() != 'd') {
+        std::cerr << "Invalid format in dictionary: " << peek() << std::endl;
         return std::unexpected(ParseError::InvalidFormat);
     }
 
@@ -153,6 +156,7 @@ std::expected<Dictionary, ParseError> Parser::parse_dictionary() {
 
     while (has_more() && peek() != 'e') {
         if (!std::isdigit(peek())) {
+            std::cerr << "Invalid format in dictionary key: " << pos_ << " " << peek() << std::endl;
             return std::unexpected(ParseError::InvalidFormat);
         }
 
@@ -162,6 +166,7 @@ std::expected<Dictionary, ParseError> Parser::parse_dictionary() {
         }
 
         if (!last_key.empty() && *key <= last_key) {
+            std::cerr << "Invalid format in dictionary key 2: " << pos_ << " " << peek() << std::endl;
             return std::unexpected(ParseError::InvalidFormat);
         }
         last_key = *key;

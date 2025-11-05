@@ -1,6 +1,9 @@
 #include "bittorrent/core/torrent_info.hpp"
+#include <ctime>
 #include <fstream>
+#include <iomanip>
 #include <sstream>
+#include <spdlog/spdlog.h>
 #include "bittorrent/bencode.hpp"
 
 namespace bittorrent::core {
@@ -52,7 +55,6 @@ std::expected<std::vector<FileInfo>, TorrentError>
 parse_files(const bencode::Dictionary& info_dict, const std::string& name) {
     std::vector<FileInfo> files;
 
-    // Check if it's a single-file torrent
     auto length_it = info_dict.find("length");
     if (length_it != info_dict.end()) {
         if (!length_it->second.is_integer()) {
@@ -141,19 +143,29 @@ std::vector<std::vector<std::string>> parse_announce_list(const bencode::Diction
 }  // anonymous namespace
 
 std::expected<TorrentInfo, TorrentError> TorrentInfo::from_bencode(const bencode::Value& value) {
+    spdlog::debug("Starting torrent parsing from bencode value");
+
     if (!value.is_dictionary()) {
+        spdlog::error("Torrent root is not a dictionary");
         return std::unexpected(TorrentError::InvalidFormat);
     }
 
     const auto& root = value.as_dictionary();
     TorrentInfo info;
 
+    spdlog::debug("Parsing announce URL");
     auto announce = get_string_field(root, "announce");
     if (!announce) {
+        spdlog::error("Failed to parse announce URL");
         return std::unexpected(announce.error());
     }
     info.announce_ = *announce;
+    spdlog::info("Tracker: {}", info.announce_);
+
     info.announce_list_ = parse_announce_list(root);
+    if (!info.announce_list_.empty()) {
+        spdlog::debug("Found {} announce tiers", info.announce_list_.size());
+    }
 
     if (auto it = root.find("comment"); it != root.end() && it->second.is_string()) {
         info.comment_ = it->second.as_string();
@@ -168,37 +180,49 @@ std::expected<TorrentInfo, TorrentError> TorrentInfo::from_bencode(const bencode
         info.creation_date_ = std::chrono::system_clock::from_time_t(timestamp);
     }
 
+    spdlog::debug("Parsing info dictionary");
     auto info_it = root.find("info");
     if (info_it == root.end() || !info_it->second.is_dictionary()) {
+        spdlog::error("Missing or invalid info dictionary");
         return std::unexpected(TorrentError::MissingRequiredField);
     }
 
     const auto& info_dict = info_it->second.as_dictionary();
     auto name = get_string_field(info_dict, "name");
     if (!name) {
+        spdlog::error("Failed to parse torrent name");
         return std::unexpected(name.error());
     }
     info.name_ = *name;
+    spdlog::info("Torrent name: {}", info.name_);
 
     auto piece_length = get_integer_field(info_dict, "piece length");
     if (!piece_length || *piece_length <= 0) {
+        spdlog::error("Invalid piece length");
         return std::unexpected(TorrentError::InvalidPieceLength);
     }
     info.piece_length_ = *piece_length;
+    spdlog::debug("Piece length: {} bytes ({} KB)", info.piece_length_, info.piece_length_ / 1024);
 
+    spdlog::debug("Parsing piece hashes");
     auto pieces = get_string_field(info_dict, "pieces");
     if (!pieces) {
+        spdlog::error("Failed to parse pieces field");
         return std::unexpected(pieces.error());
     }
 
     auto piece_hashes = parse_piece_hashes(*pieces);
     if (!piece_hashes) {
+        spdlog::error("Failed to parse piece hashes");
         return std::unexpected(piece_hashes.error());
     }
     info.piece_hashes_ = std::move(*piece_hashes);
+    spdlog::info("Number of pieces: {}", info.piece_hashes_.size());
 
+    spdlog::debug("Parsing file information");
     auto files = parse_files(info_dict, info.name_);
     if (!files) {
+        spdlog::error("Failed to parse files");
         return std::unexpected(files.error());
     }
     info.files_ = std::move(*files);
@@ -208,26 +232,42 @@ std::expected<TorrentInfo, TorrentError> TorrentInfo::from_bencode(const bencode
         info.total_size_ += file.length;
     }
 
+    if (info.is_single_file()) {
+        spdlog::info("Single file torrent, size: {} bytes ({:.2f} MB)",
+                     info.total_size_, info.total_size_ / (1024.0 * 1024.0));
+    } else {
+        spdlog::info("Multi-file torrent with {} files, total size: {} bytes ({:.2f} GB)",
+                     info.files_.size(), info.total_size_, info.total_size_ / (1024.0 * 1024.0 * 1024.0));
+    }
+
     info.info_dict_bencoded_ = bencode::Encoder::encode(info_it->second);
 
     // TODO: Calculate actual info_hash using SHA-1
     info.info_hash_ = {};
 
+    spdlog::info("Successfully parsed torrent");
+
     return info;
 }
 
 std::expected<TorrentInfo, TorrentError> TorrentInfo::from_file(const std::filesystem::path& path) {
+    spdlog::info("Loading torrent file: {}", path.string());
+
     std::ifstream file(path, std::ios::binary);
     if (!file) {
+        spdlog::error("Failed to open torrent file: {}", path.string());
         return std::unexpected(TorrentError::InvalidFormat);
     }
 
     std::stringstream buffer;
     buffer << file.rdbuf();
     std::string content = buffer.str();
+    spdlog::debug("Read {} bytes from torrent file", content.size());
 
+    spdlog::debug("Parsing bencode data");
     auto parse_result = bencode::Parser::parse(content);
     if (!parse_result) {
+        spdlog::error("Failed to parse bencode data: {}", to_string(parse_result.error()));
         return std::unexpected(TorrentError::InvalidFormat);
     }
 

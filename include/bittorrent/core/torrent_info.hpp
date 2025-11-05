@@ -8,8 +8,11 @@
 #include <chrono>
 #include <expected>
 #include <optional>
+#include <ostream>
+#include <sstream>
 #include <string>
 #include <vector>
+#include <fmt/format.h>
 
 namespace bittorrent::core {
 
@@ -75,6 +78,8 @@ public:
 
     bool verify_piece_hash(std::size_t piece_index, const SHA1Hash& hash) const noexcept;
 
+    friend std::ostream& operator<<(std::ostream& os, const TorrentInfo& info);
+
 private:
     TorrentInfo() = default;
 
@@ -93,5 +98,7 @@ private:
 
     std::string info_dict_bencoded_;
 };
+
+std::ostream& operator<<(std::ostream& os, const TorrentInfo& info);
 
 }  // namespace bittorrent::core
