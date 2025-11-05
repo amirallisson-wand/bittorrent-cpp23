@@ -32,7 +32,7 @@ if(BUILD_TESTS)
         COMMAND ${CMAKE_CTEST_COMMAND} --output-on-failure
         WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
         COMMENT "Running all tests..."
-        DEPENDS bencode_test
+        DEPENDS bencode_test torrent_info_test
     )
 endif()
 
