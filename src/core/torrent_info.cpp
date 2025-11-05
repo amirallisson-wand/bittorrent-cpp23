@@ -1,9 +1,9 @@
 #include "bittorrent/core/torrent_info.hpp"
+#include <spdlog/spdlog.h>
 #include <ctime>
 #include <fstream>
 #include <iomanip>
 #include <sstream>
-#include <spdlog/spdlog.h>
 #include "bittorrent/bencode.hpp"
 
 namespace bittorrent::core {
@@ -233,11 +233,16 @@ std::expected<TorrentInfo, TorrentError> TorrentInfo::from_bencode(const bencode
     }
 
     if (info.is_single_file()) {
-        spdlog::info("Single file torrent, size: {} bytes ({:.2f} MB)",
-                     info.total_size_, info.total_size_ / (1024.0 * 1024.0));
+        spdlog::info(
+            "Single file torrent, size: {} bytes ({:.2f} MB)", info.total_size_, info.total_size_ / (1024.0 * 1024.0)
+        );
     } else {
-        spdlog::info("Multi-file torrent with {} files, total size: {} bytes ({:.2f} GB)",
-                     info.files_.size(), info.total_size_, info.total_size_ / (1024.0 * 1024.0 * 1024.0));
+        spdlog::info(
+            "Multi-file torrent with {} files, total size: {} bytes ({:.2f} GB)",
+            info.files_.size(),
+            info.total_size_,
+            info.total_size_ / (1024.0 * 1024.0 * 1024.0)
+        );
     }
 
     info.info_dict_bencoded_ = bencode::Encoder::encode(info_it->second);

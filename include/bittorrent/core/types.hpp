@@ -2,9 +2,9 @@
 
 #include <array>
 #include <cstdint>
+#include <expected>
 #include <string>
 #include <vector>
-#include <expected>
 
 namespace bittorrent::core {
 

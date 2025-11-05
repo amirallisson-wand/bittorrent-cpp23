@@ -110,8 +110,8 @@ std::expected<String, ParseError> Parser::parse_string() {
     consume();
 
     if (pos_ + length > data_.size()) {
-        std::cerr << "String too long: trying to read " << length << " bytes at pos " << pos_ 
-                  << " but only " << (data_.size() - pos_) << " bytes remaining\n";
+        std::cerr << "String too long: trying to read " << length << " bytes at pos " << pos_ << " but only "
+                  << (data_.size() - pos_) << " bytes remaining\n";
         return std::unexpected(ParseError::UnexpectedEnd);
     }
 
