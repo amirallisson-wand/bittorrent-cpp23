@@ -5,6 +5,7 @@
 #include <iomanip>
 #include <sstream>
 #include "bittorrent/bencode.hpp"
+#include "bittorrent/utils/crypto.hpp"
 
 namespace bittorrent::core {
 
@@ -246,10 +247,8 @@ std::expected<TorrentInfo, TorrentError> TorrentInfo::from_bencode(const bencode
     }
 
     info.info_dict_bencoded_ = bencode::Encoder::encode(info_it->second);
-
-    // TODO: Calculate actual info_hash using SHA-1
-    info.info_hash_ = {};
-
+    info.info_hash_ = utils::sha1(info.info_dict_bencoded_);
+    spdlog::debug("Calculated info_hash: {}", to_hex_string(info.info_hash_));
     spdlog::info("Successfully parsed torrent");
 
     return info;

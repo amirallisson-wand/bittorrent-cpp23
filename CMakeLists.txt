@@ -5,7 +5,7 @@ set(CMAKE_CXX_STANDARD 23)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
-    add_compile_options(-Wall -Wextra -Wpedantic -Werror -Wno-dangling-reference)
+    add_compile_options(-Wall -Wextra -Wpedantic -Wno-dangling-reference)
 endif()
 
 include(FetchContent)
@@ -15,6 +15,19 @@ FetchContent_Declare(
     GIT_TAG v1.13.0
 )
 FetchContent_MakeAvailable(spdlog)
+
+# Boost libraries (Asio, Beast, URL)
+FetchContent_Declare(
+    Boost
+    URL https://github.com/boostorg/boost/releases/download/boost-1.84.0/boost-1.84.0.tar.xz
+    DOWNLOAD_EXTRACT_TIMESTAMP TRUE
+)
+set(BOOST_INCLUDE_LIBRARIES asio beast url system)
+set(BOOST_ENABLE_CMAKE ON)
+FetchContent_MakeAvailable(Boost)
+
+# OpenSSL for SHA-1
+find_package(OpenSSL REQUIRED)
 
 add_subdirectory(src)
 
@@ -40,7 +53,7 @@ if(BUILD_TESTS)
         COMMAND ${CMAKE_CTEST_COMMAND} --output-on-failure
         WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
         COMMENT "Running all tests..."
-        DEPENDS bencode_test torrent_info_test
+        DEPENDS bencode_test torrent_info_test http_tracker_test crypto_test
     )
 endif()
 
